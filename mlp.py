@@ -1,10 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed May 16 01:02:21 2018
-
-@author: Kel3vra
-"""
-
+from keras import backend as K
+K.set_session(K.tf.Session(config=K.tf.ConfigProto(intra_op_parallelism_threads=32, inter_op_parallelism_threads=32)))
 import numpy as np # linear algebra
 import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 from pickle import load
@@ -16,10 +11,9 @@ from sklearn.model_selection import train_test_split
 #from subprocess import check_output
 #print(check_output(["ls", "input"]).decode("utf8"))
 
-DATA_FILE = 'sampleAmazon.csv'
-df = pd.read_csv(DATA_FILE,encoding='latin-1')
-print(df.head())
-tags = df.overall
+DATA_FILE = '../y_train.pickle'
+df = pd.read_pickle(DATA_FILE)
+tags = df
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
 from keras.layers import Embedding
@@ -44,14 +38,12 @@ y = labels(tags)
 
 # load a  dataset
 def load_sentences(filename):
-	return load(open(filename, 'rb'))
+        return load(open(filename, 'rb'))
+
 # our model
 def get_simple_model(num_max):
    model = Sequential()
    model.add(Dense(512, input_shape=(num_max,)))
-   model.add(Activation('relu'))
-   model.add(Dropout(0.2))
-   model.add(Dense(256))
    model.add(Activation('relu'))
    model.add(Dropout(0.2))
    model.add(Dense(5)) #Last layer with one output per class
@@ -69,9 +61,8 @@ def sparse(dataset):
     return x,num_max
 
 def splitting(x,y):
-    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.33, random_state=42)
-    X_train, x_cross, y_train, y_cross = train_test_split(X_train, y_train, test_size=0.10, random_state=42)
-    return X_train,y_train,X_test,y_test,x_cross,y_cross
+    X_train, X_cross, y_train, y_cross = train_test_split(x, y, test_size=0.10, random_state=42)
+    return X_train,y_train,X_cross,y_cross
 
 def batch_generator(X, y, batch_size, shuffle):
     number_of_batches = X.shape[0]/batch_size
@@ -91,15 +82,15 @@ def batch_generator(X, y, batch_size, shuffle):
             counter = 0
 
 def check_model(model,x,y,x_cross,y_cross):
-   model.fit_generator(generator=batch_generator(x, y, 10, True),
+   history =model.fit_generator(generator=batch_generator(x, y, 32, True),
                        epochs=50,
                        validation_data=(x_cross.todense(), y_cross),
-                       samples_per_epoch=100)
+                       samples_per_epoch=20,shuffle=True)
    model.save(filepath=r'mlpAmazon.h5', overwrite=True)
+   print(history.history, file=open('History_mlp_text_class', 'w'))
 
-
-dataset = load_sentences('Tf-IDF.pickle')
-x,num_max = sparse(dataset)
-x_train,y_train,x_test,y_test,x_cross,y_cross = splitting(x,y)
+train = load_sentences('../tf_train.pickle')
+x,num_max = sparse(train)
+x_train,y_train,x_cross,y_cross = splitting(x,y)
 m = get_simple_model(num_max)
 check_model(m,x_train,y_train,x_cross,y_cross)
